@@ -1,0 +1,142 @@
+---
+title: Welcome to Storms and Other Severe Weather Events Analysis
+subtitle: Impacts to the Population and Economy
+author: Teo Lye Choon
+job: Reproducible Pitch Presentation
+framework: io2012
+highlighter: highlight.js
+hitheme: tomorrow
+widgets: bootstrap, quiz, shiny, interactive
+ext_widgets : {rCharts: libraries/nvd3}
+mode: selfcontained
+---
+
+## Storms and Other Severe Weather Events
+
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This project involves exploring the U.S. National Oceanic and Atmospheric 
+Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property 
+damage.
+
+The events in the database start in the year 1950 and end in November 2011. In 
+the earlier years of the database there are generally fewer events recorded, 
+most likely due to a lack of good records. More recent years should be 
+considered more complete.
+
+The year range from the starting year to the ending year can be varied from
+the slider knots with the selected event types to observe the populution and 
+economic impacts by state as well as graphically by year.
+
+---
+
+```{r, echo=FALSE, results='asis'}
+
+# Load data
+states_map <- map_data("state")
+dt <- fread('events.csv') %>% mutate(EVTYPE = tolower(EVTYPE))
+evtypes <- sort(unique(dt$EVTYPE))
+
+```
+
+```{r nvd3plot1, results = 'asis', comment = NA, message = F, echo = F}
+slidifyUI(
+  sidebarPanel(
+      h2('Population Impact by Year', align = "center"),
+      h3('Note : Currently sliderInput not working for year selection', 
+         align = "Center")
+      )
+)
+
+require(rCharts)
+
+#' Aggregate dataset by year
+#' 
+#' @param dt data.table
+#' @param year_min integer
+#' @param year_max integer
+#' @param evtypes character vector
+#' @return data.table
+#'
+aggregate_by_year <- function(dt, year_min, year_max, evtypes) {
+    round_2 <- function(x) round(x, 2)
+    
+    # Filter
+    dt %>% filter(YEAR >= year_min, YEAR <= year_max, EVTYPE %in% evtypes) %>%
+        # Group and aggregate
+        group_by(YEAR) %>% summarise_each(funs(sum), COUNT:CROPDMG) %>%
+        # Round
+        mutate_each(funs(round_2), PROPDMG, CROPDMG) %>%
+        rename(
+            Year = YEAR, Count = COUNT,
+            Fatalities = FATALITIES, Injuries = INJURIES,
+            Property = PROPDMG, Crops = CROPDMG
+        )
+}
+
+#' Prepare plots of impact by year
+#'
+#' @param dt data.table
+#' @param dom
+#' @param yAxisLabel
+#' @param desc
+#' @return plot
+#' 
+plot_impact_by_year <- function(dt, dom, yAxisLabel, desc = FALSE) {
+    impactPlot <- nPlot(
+        value ~ Year, group = "variable",
+        data = melt(dt, id="Year") %>% arrange(Year, if (desc) { 
+            desc(variable) } else { variable }),
+        type = "stackedAreaChart", dom = dom, width = 650
+    )
+    impactPlot$chart(margin = list(left = 100))
+    impactPlot$yAxis(axisLabel = yAxisLabel, width = 80)
+    impactPlot$xAxis(axisLabel = "Year", width = 70)
+    
+    impactPlot
+}
+
+# Prepare dataset for time series
+dt.agg.year <- aggregate_by_year(dt, 1950, 2011, evtypes)
+
+plot_impact_by_year(dt = dt.agg.year %>% select(Year, Injuries, Fatalities),
+                    dom = "populationImpact", yAxisLabel = "Affected",
+                    desc = TRUE)
+
+```
+
+---
+
+```{r nvd3plot2, results = 'asis', comment = NA, message = F, echo = F}
+slidifyUI(
+  sidebarPanel(
+      h2('Economic Impact by Year', align = "center"),
+      h3('Note : Currently sliderInput not working for year selection', 
+         align = "Center")
+      )
+)
+
+# Economic impact by year
+plot_impact_by_year(dt = dt.agg.year %>% select(Year, Crops, Property),
+                    dom = "economicImpact",
+                    yAxisLabel = "Total damage (Million USD)"
+                    )
+
+```
+
+---
+
+## Summary
+
+The application will enable the user to experiment with the storm and other severe weather event impacts to both population and economy. 
+* Across the United States, the top 3 events that are most harmful with respect to population health are 
+    - Tarnado 
+    - Excessive Heat
+    - TSTM Wind 
+* Across the United States, the top 3 events that have the greatest economic consequences are
+    - Tarnado
+    - Flash Flood
+    - TSTM Wind
+* From experimenting, the user may be able to arrive at the conclusion that 
+Tarnado is the most devastating to the population health and causes the greatest 
+economic consequences.
